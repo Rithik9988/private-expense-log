@@ -6,6 +6,7 @@
   <title>Expense Log — Private &amp; Local Expense Tracker</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -38,17 +39,31 @@
       </div>
     </header>
 
-    <!-- Aesthetic Google Sheet Connection Bar -->
+    <!-- 1-Click Gmail OAuth Sync Bar -->
     <section class="bg-white rounded-2xl border border-slate-200 px-5 py-3.5 shadow-sm">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-2.5 min-w-0">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
           <div class="min-w-0">
-            <span class="text-xs font-semibold text-slate-800">Google Sheet Live Sync</span>
-            <span id="syncStatusLabel" class="text-xs text-slate-500 ml-1.5">· Optional · Connect your own link</span>
+            <span class="text-xs font-semibold text-slate-800">Gmail Auto-Sync</span>
+            <span id="syncStatusLabel" class="text-xs text-slate-500 ml-1.5">· Sign in with Google to scan expenses</span>
           </div>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            id="connectGmailBtn"
+            type="button"
+            class="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer"
+          >
+            Connect Gmail
+          </button>
+          <button
+            id="signOutBtn"
+            type="button"
+            class="hidden px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition-colors cursor-pointer"
+          >
+            Sign Out
+          </button>
           <button
             id="loadDemoBtn"
             type="button"
@@ -66,34 +81,60 @@
           <button
             id="toggleSettingsBtn"
             type="button"
-            class="px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs transition-colors cursor-pointer"
+            class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs transition-colors cursor-pointer"
           >
-            Connect Sheet Link
+            Setup
           </button>
         </div>
       </div>
 
-      <div id="syncSettingsCard" class="hidden mt-3 pt-3 border-t border-slate-100 space-y-2.5">
-        <div class="flex flex-col sm:flex-row gap-2">
-          <input
-            id="sheetUrlInput"
-            type="url"
-            placeholder="Paste your own Google Apps Script Web App URL (https://script.google.com/macros/s/.../exec)"
-            class="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-          />
-          <button
-            id="syncSheetBtn"
-            type="button"
-            class="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm transition-colors cursor-pointer shrink-0"
-          >
-            Save &amp; Sync
-          </button>
+      <div id="syncSettingsCard" class="hidden mt-3 pt-3 border-t border-slate-100 space-y-3">
+        <div>
+          <label for="clientIdInput" class="block text-xs font-medium text-slate-700 mb-1">
+            Google OAuth Client ID (for 1-Click Gmail Sync)
+          </label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input
+              id="clientIdInput"
+              type="text"
+              placeholder="1234567890-abc.apps.googleusercontent.com"
+              class="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+            <button
+              id="saveClientIdBtn"
+              type="button"
+              class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm transition-colors cursor-pointer shrink-0"
+            >
+              Save Client ID
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label for="sheetUrlInput" class="block text-xs font-medium text-slate-700 mb-1">
+            Or connect a personal Google Apps Script Web App URL
+          </label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input
+              id="sheetUrlInput"
+              type="url"
+              placeholder="https://script.google.com/macros/s/.../exec"
+              class="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+            <button
+              id="syncSheetBtn"
+              type="button"
+              class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm transition-colors cursor-pointer shrink-0"
+            >
+              Sync Sheet
+            </button>
+          </div>
         </div>
         <p class="text-[11px] text-slate-500">
-          Your Sheet URL is saved only in your own browser. No data is shared with the site creator or any third party.
+          Privacy-first: Your OAuth token stays in memory for this session only, and all expenses stay in your browser.
         </p>
-        <div id="syncFeedback" class="hidden text-xs rounded-lg px-3 py-2"></div>
       </div>
+      <div id="syncFeedback" class="hidden mt-2.5 text-xs rounded-lg px-3 py-2"></div>
     </section>
 
     <!-- Category Spending Dashboard -->
@@ -307,6 +348,9 @@
 
     const STORAGE_KEY = 'public_expense_log_v1';
     const BUDGET_STORAGE_KEY = 'public_expense_budgets_v1';
+    // Paste your Google Cloud OAuth Client ID below before pushing to GitHub:
+    const DEFAULT_GOOGLE_CLIENT_ID = '';
+    const CLIENT_ID_KEY = 'public_expense_oauth_client_id_v1';
     const SHEET_URL_KEY = 'public_expense_sheet_url_v1';
 
     const DEFAULT_BUDGETS = {
@@ -321,6 +365,7 @@
     let expenses = [];
     let budgets = { ...DEFAULT_BUDGETS };
     let chartInstance = null;
+    let currentAccessToken = null;
 
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -343,6 +388,10 @@
     const dateInput = document.getElementById('dateInput');
     const formError = document.getElementById('formError');
 
+    const connectGmailBtn = document.getElementById('connectGmailBtn');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const clientIdInput = document.getElementById('clientIdInput');
+    const saveClientIdBtn = document.getElementById('saveClientIdBtn');
     const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
     const syncSettingsCard = document.getElementById('syncSettingsCard');
     const syncStatusLabel = document.getElementById('syncStatusLabel');
@@ -376,12 +425,22 @@
     try {
       const savedUrl = localStorage.getItem(SHEET_URL_KEY);
       if (savedUrl) sheetUrlInput.value = savedUrl;
-    } catch (e) {}
+      const savedClientId = localStorage.getItem(CLIENT_ID_KEY) || DEFAULT_GOOGLE_CLIENT_ID;
+      if (savedClientId) clientIdInput.value = savedClientId;
+    } catch (e) {
+      if (DEFAULT_GOOGLE_CLIENT_ID) clientIdInput.value = DEFAULT_GOOGLE_CLIENT_ID;
+    }
 
     function updateSyncBarLabel() {
+      const hasClient = Boolean((clientIdInput.value || DEFAULT_GOOGLE_CLIENT_ID).trim());
       const hasUrl = Boolean(sheetUrlInput.value.trim());
-      toggleSettingsBtn.textContent = hasUrl ? 'Edit Sheet Link' : 'Connect Sheet Link';
-      syncStatusLabel.textContent = hasUrl ? '· Connected' : '· Optional · Connect your own link';
+      if (hasClient) {
+        syncStatusLabel.textContent = '· Ready for 1-click Google Sign-In';
+      } else if (hasUrl) {
+        syncStatusLabel.textContent = '· Sheet link connected';
+      } else {
+        syncStatusLabel.textContent = '· Sign in with Google to scan expenses';
+      }
     }
     updateSyncBarLabel();
 
@@ -646,6 +705,148 @@
       }).join('');
     }
 
+    function parseGmailSnippet(subject, snippet, internalDateMs) {
+      const text = subject + ' ' + snippet;
+      const amtMatch = text.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
+      if (!amtMatch) return null;
+      const amount = parseFloat(amtMatch[1].replace(/,/g, ''));
+      if (isNaN(amount) || amount <= 0) return null;
+
+      const lower = text.toLowerCase();
+      let merchant = '';
+      const order = ['Quick Commerce', 'Commute', 'Shopping', 'Food & Dining', 'Bills & Utilities'];
+      for (const cat of order) {
+        for (const kw of CATEGORIES[cat].keywords) {
+          if (lower.includes(kw)) {
+            merchant = kw.replace(/\b\w/g, (c) => c.toUpperCase());
+            break;
+          }
+        }
+        if (merchant) break;
+      }
+      if (!merchant) merchant = 'Online Transaction';
+
+      const category = detectCategory(text);
+      const dt = internalDateMs ? new Date(Number(internalDateMs)) : new Date();
+      const date = dt.toISOString().split('T')[0];
+      return { date, merchant, amount, category, mode: 'Online' };
+    }
+
+    async function fetchGmailTransactions(accessToken) {
+      connectGmailBtn.disabled = true;
+      connectGmailBtn.textContent = 'Scanning...';
+      syncFeedback.classList.add('hidden');
+
+      try {
+        const query = encodeURIComponent('(debited OR "UPI" OR "paid" OR "transaction") newer_than:14d');
+        const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=${query}`, {
+          headers: { Authorization: 'Bearer ' + accessToken }
+        });
+        if (!listRes.ok) throw new Error('Gmail API error ' + listRes.status);
+        const listData = await listRes.json();
+        const messages = listData.messages || [];
+
+        const existingKeys = new Set(
+          expenses.map((e) => `${e.date}|${String(e.merchant).toLowerCase()}|${Number(e.amount).toFixed(2)}`)
+        );
+
+        let added = 0;
+        for (const m of messages) {
+          const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject`, {
+            headers: { Authorization: 'Bearer ' + accessToken }
+          });
+          if (!msgRes.ok) continue;
+          const msgData = await msgRes.json();
+          const headers = (msgData.payload && msgData.payload.headers) || [];
+          const subjHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
+          const subject = subjHeader ? subjHeader.value : '';
+          const snippet = msgData.snippet || '';
+
+          const parsed = parseGmailSnippet(subject, snippet, msgData.internalDate);
+          if (!parsed) continue;
+
+          const key = `${parsed.date}|${parsed.merchant.toLowerCase()}|${parsed.amount.toFixed(2)}`;
+          if (!existingKeys.has(key)) {
+            existingKeys.add(key);
+            expenses.unshift({ id: 'gm_' + m.id, ...parsed });
+            added++;
+          }
+        }
+
+        expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        saveExpenses();
+        render();
+
+        syncStatusLabel.textContent = `· Synced (${expenses.length} total)`;
+        syncFeedback.textContent = added > 0
+          ? `Found and added ${added} new transaction${added === 1 ? '' : 's'} from your Gmail.`
+          : 'Scanned your recent Gmail—no new transactions found.';
+        syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-emerald-700 bg-emerald-50 border border-emerald-200';
+      } catch (err) {
+        syncFeedback.textContent = 'Could not scan Gmail: ' + (err && err.message ? err.message : 'Check your OAuth Client ID and Test Users.');
+        syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-rose-600 bg-rose-50 border border-rose-200';
+      } finally {
+        connectGmailBtn.disabled = false;
+        connectGmailBtn.textContent = currentAccessToken ? 'Rescan Gmail' : 'Connect Gmail';
+      }
+    }
+
+    connectGmailBtn.addEventListener('click', () => {
+      const clientId = (clientIdInput.value || DEFAULT_GOOGLE_CLIENT_ID).trim();
+      if (!clientId) {
+        syncSettingsCard.classList.remove('hidden');
+        clientIdInput.focus();
+        syncFeedback.textContent = 'Add your Google OAuth Client ID in Setup first (see the steps in chat).';
+        syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-amber-800 bg-amber-50 border border-amber-200';
+        return;
+      }
+      if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+        syncFeedback.textContent = 'Google Sign-In library is still loading—please try again in a second.';
+        syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-rose-600 bg-rose-50 border border-rose-200';
+        return;
+      }
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/gmail.readonly',
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            currentAccessToken = tokenResponse.access_token;
+            signOutBtn.classList.remove('hidden');
+            connectGmailBtn.textContent = 'Rescan Gmail';
+            fetchGmailTransactions(currentAccessToken);
+          }
+        }
+      });
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    });
+
+
+    signOutBtn.addEventListener('click', () => {
+      const tokenToRevoke = currentAccessToken;
+      currentAccessToken = null;
+      signOutBtn.classList.add('hidden');
+      connectGmailBtn.textContent = 'Connect Gmail';
+      syncStatusLabel.textContent = '· Signed out (token revoked)';
+
+      if (tokenToRevoke && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+        google.accounts.oauth2.revoke(tokenToRevoke, () => {
+          syncFeedback.textContent = 'Signed out and disabled your Google access token.';
+          syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-slate-700 bg-slate-100 border border-slate-200';
+        });
+      } else {
+        syncFeedback.textContent = 'Signed out.';
+        syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-slate-700 bg-slate-100 border border-slate-200';
+      }
+    });
+
+    saveClientIdBtn.addEventListener('click', () => {
+      const val = clientIdInput.value.trim();
+      try { localStorage.setItem(CLIENT_ID_KEY, val); } catch (e) {}
+      updateSyncBarLabel();
+      syncFeedback.textContent = val ? 'OAuth Client ID saved! Click "Connect Gmail" above to test.' : 'Cleared OAuth Client ID.';
+      syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-emerald-700 bg-emerald-50 border border-emerald-200';
+    });
+
     async function syncFromGoogleSheet(silent = false) {
       const url = sheetUrlInput.value.trim();
       if (!url) {
@@ -713,7 +914,7 @@
 
     toggleSettingsBtn.addEventListener('click', () => {
       const isHidden = syncSettingsCard.classList.toggle('hidden');
-      if (!isHidden) sheetUrlInput.focus();
+      if (!isHidden) clientIdInput.focus();
     });
 
     syncSheetBtn.addEventListener('click', () => syncFromGoogleSheet(false));
