@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expense Log — Private &amp; Local Expense Tracker</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen py-8 px-4">
+  <main class="max-w-3xl mx-auto space-y-6">
+    <!-- Header & Total Card -->
+    <header class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <span class="inline-block text-xs font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full mb-2">
+          100% Private · Runs in Your Browser
+        </span>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Expense Log</h1>
+        <p class="text-sm text-slate-500 mt-0.5">Track cash &amp; online spends by category. Your data never leaves your device.</p>
+      </div>
+      <div class="flex items-stretch gap-3 shrink-0">
+        <div class="bg-slate-100 text-slate-800 px-4 py-3 rounded-xl text-right">
+          <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">Cash / Online</div>
+          <div id="modeSplit" class="text-sm font-semibold tabular-nums mt-1">₹0 / ₹0</div>
+        </div>
+        <div class="bg-slate-900 text-white px-4 py-3 rounded-xl text-right">
+          <div class="text-xs font-medium text-slate-300 uppercase tracking-wide">Total Spent</div>
+          <div id="totalAmount" class="text-2xl font-bold tabular-nums mt-0.5">₹0.00</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Aesthetic Google Sheet Connection Bar -->
+    <section class="bg-white rounded-2xl border border-slate-200 px-5 py-3.5 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+          <div class="min-w-0">
+            <span class="text-xs font-semibold text-slate-800">Google Sheet Live Sync</span>
+            <span id="syncStatusLabel" class="text-xs text-slate-500 ml-1.5">· Optional · Connect your own link</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            id="loadDemoBtn"
+            type="button"
+            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+          >
+            Try Sample Data
+          </button>
+          <button
+            id="exportCsvBtn"
+            type="button"
+            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+          >
+            Export CSV
+          </button>
+          <button
+            id="toggleSettingsBtn"
+            type="button"
+            class="px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs transition-colors cursor-pointer"
+          >
+            Connect Sheet Link
+          </button>
+        </div>
+      </div>
+
+      <div id="syncSettingsCard" class="hidden mt-3 pt-3 border-t border-slate-100 space-y-2.5">
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input
+            id="sheetUrlInput"
+            type="url"
+            placeholder="Paste your own Google Apps Script Web App URL (https://script.google.com/macros/s/.../exec)"
+            class="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          />
+          <button
+            id="syncSheetBtn"
+            type="button"
+            class="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm transition-colors cursor-pointer shrink-0"
+          >
+            Save &amp; Sync
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-500">
+          Your Sheet URL is saved only in your own browser. No data is shared with the site creator or any third party.
+        </p>
+        <div id="syncFeedback" class="hidden text-xs rounded-lg px-3 py-2"></div>
+      </div>
+    </section>
+
+    <!-- Category Spending Dashboard -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div>
+          <h2 class="text-base font-semibold text-slate-800">Spending by Category</h2>
+          <span id="dashboardScope" class="text-xs text-slate-400">All expenses</span>
+        </div>
+        <select
+          id="filterMonth"
+          aria-label="Filter by month"
+          class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        >
+          <option value="ALL">All Months</option>
+        </select>
+      </div>
+
+      <div id="dashboardEmpty" class="text-center py-6 px-4 border-2 border-dashed border-slate-200 rounded-xl">
+        <p class="text-sm font-medium text-slate-600">Your category dashboard will appear here</p>
+        <p class="text-xs text-slate-400 mt-1">Add an expense below or click "Try Sample Data" above to preview the charts.</p>
+      </div>
+
+      <div id="dashboardContent" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+        <div class="relative h-60">
+          <canvas id="categoryChart"></canvas>
+        </div>
+        <div id="categoryBars" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- Monthly Category Budgets -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+        <div>
+          <h2 class="text-base font-semibold text-slate-800">Monthly Category Budgets</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Set a monthly limit (₹) per category to get near-limit and over-budget alerts.</p>
+        </div>
+        <span id="budgetSummaryBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 self-start sm:self-auto">
+          All on track
+        </span>
+      </div>
+      <div id="budgetList" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+    </section>
+
+    <!-- Manual Add Expense Form (Cash or Online) -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <h2 class="text-base font-semibold text-slate-800 mb-4">Add Cash or Online Expense</h2>
+      <form id="expenseForm" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="sm:col-span-2">
+            <label for="merchantInput" class="block text-sm font-medium text-slate-700 mb-1">
+              Merchant or Item
+            </label>
+            <input
+              id="merchantInput"
+              type="text"
+              required
+              placeholder="e.g., Uber, Zepto, Tea stall"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+          </div>
+          <div>
+            <label for="amountInput" class="block text-sm font-medium text-slate-700 mb-1">
+              Amount (₹)
+            </label>
+            <input
+              id="amountInput"
+              type="number"
+              step="0.01"
+              min="0.01"
+              required
+              placeholder="e.g., 120"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label for="categoryInput" class="block text-sm font-medium text-slate-700 mb-1">
+              Category
+            </label>
+            <select
+              id="categoryInput"
+              class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="Commute">Commute (Uber, Ola, Rapido)</option>
+              <option value="Quick Commerce">Quick Commerce (Zepto, Blinkit, Instamart)</option>
+              <option value="Shopping">Shopping (Amazon, Flipkart, Myntra)</option>
+              <option value="Food & Dining">Food &amp; Dining</option>
+              <option value="Bills & Utilities">Bills &amp; Utilities</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label for="modeInput" class="block text-sm font-medium text-slate-700 mb-1">
+              Payment Mode
+            </label>
+            <select
+              id="modeInput"
+              class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="Cash">Cash</option>
+              <option value="Online">Online / Mail</option>
+            </select>
+          </div>
+          <div>
+            <label for="dateInput" class="block text-sm font-medium text-slate-700 mb-1">
+              Date
+            </label>
+            <input
+              id="dateInput"
+              type="date"
+              required
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+          </div>
+        </div>
+
+        <div id="formError" class="hidden text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></div>
+
+        <button
+          type="submit"
+          class="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm py-3 transition-colors cursor-pointer"
+        >
+          + Add Expense
+        </button>
+      </form>
+    </section>
+
+    <!-- Expense List with Filters -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h2 class="text-base font-semibold text-slate-800">
+          Logged Expenses <span id="entryCount" class="text-slate-400 font-normal">(0)</span>
+        </h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <select
+            id="filterCategory"
+            aria-label="Filter by category"
+            class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="ALL">All Categories</option>
+            <option value="Commute">Commute</option>
+            <option value="Quick Commerce">Quick Commerce</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Food & Dining">Food &amp; Dining</option>
+            <option value="Bills & Utilities">Bills &amp; Utilities</option>
+            <option value="Other">Other</option>
+          </select>
+          <select
+            id="filterMode"
+            aria-label="Filter by payment mode"
+            class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="ALL">All Modes</option>
+            <option value="Online">Online / Mail</option>
+            <option value="Cash">Cash</option>
+          </select>
+          <button
+            id="clearAllBtn"
+            type="button"
+            class="hidden text-xs font-medium text-slate-500 hover:text-rose-600 transition-colors cursor-pointer ml-1"
+          >
+            Clear all
+          </button>
+        </div>
+      </div>
+
+      <div id="emptyState" class="text-center py-8 px-4 border-2 border-dashed border-slate-200 rounded-xl">
+        <p class="text-sm font-medium text-slate-600">No expenses logged yet</p>
+        <p class="text-xs text-slate-400 mt-1">Add your first expense above to start tracking.</p>
+      </div>
+
+      <ul id="expenseList" class="divide-y divide-slate-100 hidden"></ul>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400 pb-4">
+      Privacy-first: All expenses and budgets are stored locally in your browser. No tracking, no ads, no central database.
+    </footer>
+  </main>
+
+  <script>
+    const CATEGORIES = {
+      'Commute': {
+        color: '#0ea5e9',
+        keywords: ['uber', 'ola', 'rapido', 'metro', 'irctc', 'redbus', 'blusmart', 'petrol', 'fuel', 'auto']
+      },
+      'Quick Commerce': {
+        color: '#8b5cf6',
+        keywords: ['zepto', 'blinkit', 'instamart', 'flipkart minutes', 'amazon now', 'bigbasket']
+      },
+      'Shopping': {
+        color: '#f59e0b',
+        keywords: ['amazon', 'flipkart', 'myntra', 'ajio', 'nykaa', 'meesho']
+      },
+      'Food & Dining': {
+        color: '#10b981',
+        keywords: ['swiggy', 'zomato', 'starbucks', 'dominos', 'kfc', 'cafe', 'restaurant']
+      },
+      'Bills & Utilities': {
+        color: '#6366f1',
+        keywords: ['airtel', 'jio', 'electricity', 'broadband', 'recharge', 'gas', 'water']
+      },
+      'Other': {
+        color: '#64748b',
+        keywords: []
+      }
+    };
+
+    const STORAGE_KEY = 'public_expense_log_v1';
+    const BUDGET_STORAGE_KEY = 'public_expense_budgets_v1';
+    const SHEET_URL_KEY = 'public_expense_sheet_url_v1';
+
+    const DEFAULT_BUDGETS = {
+      'Commute': 2000,
+      'Quick Commerce': 1500,
+      'Shopping': 4000,
+      'Food & Dining': 1500,
+      'Bills & Utilities': 12000,
+      'Other': 5000
+    };
+
+    let expenses = [];
+    let budgets = { ...DEFAULT_BUDGETS };
+    let chartInstance = null;
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) expenses = parsed;
+      }
+      const savedBudgets = localStorage.getItem(BUDGET_STORAGE_KEY);
+      if (savedBudgets) {
+        const parsedB = JSON.parse(savedBudgets);
+        if (parsedB && typeof parsedB === 'object') budgets = { ...DEFAULT_BUDGETS, ...parsedB };
+      }
+    } catch (e) {}
+
+    const form = document.getElementById('expenseForm');
+    const merchantInput = document.getElementById('merchantInput');
+    const amountInput = document.getElementById('amountInput');
+    const categoryInput = document.getElementById('categoryInput');
+    const modeInput = document.getElementById('modeInput');
+    const dateInput = document.getElementById('dateInput');
+    const formError = document.getElementById('formError');
+
+    const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+    const syncSettingsCard = document.getElementById('syncSettingsCard');
+    const syncStatusLabel = document.getElementById('syncStatusLabel');
+    const sheetUrlInput = document.getElementById('sheetUrlInput');
+    const syncSheetBtn = document.getElementById('syncSheetBtn');
+    const syncFeedback = document.getElementById('syncFeedback');
+    const loadDemoBtn = document.getElementById('loadDemoBtn');
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+
+    const filterMonth = document.getElementById('filterMonth');
+    const filterCategory = document.getElementById('filterCategory');
+    const filterMode = document.getElementById('filterMode');
+
+    const totalAmountEl = document.getElementById('totalAmount');
+    const modeSplitEl = document.getElementById('modeSplit');
+    const entryCountEl = document.getElementById('entryCount');
+    const emptyStateEl = document.getElementById('emptyState');
+    const expenseListEl = document.getElementById('expenseList');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    const dashboardEmptyEl = document.getElementById('dashboardEmpty');
+    const dashboardContentEl = document.getElementById('dashboardContent');
+    const dashboardScopeEl = document.getElementById('dashboardScope');
+    const categoryBarsEl = document.getElementById('categoryBars');
+    const chartCanvas = document.getElementById('categoryChart');
+    const budgetListEl = document.getElementById('budgetList');
+    const budgetSummaryBadgeEl = document.getElementById('budgetSummaryBadge');
+
+    dateInput.value = new Date().toISOString().split('T')[0];
+
+    try {
+      const savedUrl = localStorage.getItem(SHEET_URL_KEY);
+      if (savedUrl) sheetUrlInput.value = savedUrl;
+    } catch (e) {}
+
+    function updateSyncBarLabel() {
+      const hasUrl = Boolean(sheetUrlInput.value.trim());
+      toggleSettingsBtn.textContent = hasUrl ? 'Edit Sheet Link' : 'Connect Sheet Link';
+      syncStatusLabel.textContent = hasUrl ? '· Connected' : '· Optional · Connect your own link';
+    }
+    updateSyncBarLabel();
+
+    function formatRupees(value) {
+      return '₹' + Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatCompactRupees(value) {
+      return '₹' + Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    }
+
+    function saveExpenses() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses)); } catch (e) {}
+    }
+
+    function saveBudgets() {
+      try { localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(budgets)); } catch (e) {}
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function detectCategory(text) {
+      const lower = text.toLowerCase();
+      const order = ['Quick Commerce', 'Commute', 'Shopping', 'Food & Dining', 'Bills & Utilities'];
+      for (const cat of order) {
+        if (CATEGORIES[cat].keywords.some((kw) => lower.includes(kw))) return cat;
+      }
+      return 'Other';
+    }
+
+    function populateMonthFilter() {
+      const current = filterMonth.value || 'ALL';
+      const months = Array.from(new Set(
+        expenses.map((item) => String(item.date || '').slice(0, 7)).filter((m) => /^\d{4}-\d{2}$/.test(m))
+      )).sort().reverse();
+
+      const formatMonthLabel = (ym) => {
+        const [y, m] = ym.split('-');
+        const dt = new Date(Number(y), Number(m) - 1, 1);
+        return dt.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      };
+
+      filterMonth.innerHTML = '<option value="ALL">All Months</option>' +
+        months.map((ym) => `<option value="${ym}">${formatMonthLabel(ym)}</option>`).join('');
+
+      filterMonth.value = (current === 'ALL' || months.includes(current)) ? current : 'ALL';
+    }
+
+    function renderDashboard(items, total) {
+      if (items.length === 0 || total <= 0) {
+        dashboardEmptyEl.classList.remove('hidden');
+        dashboardContentEl.classList.add('hidden');
+        if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+        return;
+      }
+
+      dashboardEmptyEl.classList.add('hidden');
+      dashboardContentEl.classList.remove('hidden');
+
+      const totalsByCategory = {};
+      Object.keys(CATEGORIES).forEach((cat) => { totalsByCategory[cat] = 0; });
+      items.forEach((item) => {
+        const cat = CATEGORIES[item.category] ? item.category : 'Other';
+        totalsByCategory[cat] += item.amount;
+      });
+
+      const activeCategories = Object.entries(totalsByCategory)
+        .filter(([, val]) => val > 0)
+        .sort((a, b) => b[1] - a[1]);
+
+      categoryBarsEl.innerHTML = activeCategories.map(([cat, val]) => {
+        const pct = Math.round((val / total) * 100);
+        const color = CATEGORIES[cat].color;
+        return `
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-medium text-slate-700 flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color:${color}"></span>
+                ${escapeHtml(cat)}
+              </span>
+              <span class="font-semibold text-slate-900 tabular-nums">${formatRupees(val)} (${pct}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div class="h-2 rounded-full transition-all" style="width:${pct}%; background-color:${color}"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const labels = activeCategories.map(([cat]) => cat);
+      const data = activeCategories.map(([, val]) => val);
+      const colors = activeCategories.map(([cat]) => CATEGORIES[cat].color);
+
+      if (typeof Chart !== 'undefined') {
+        if (chartInstance) {
+          chartInstance.data.labels = labels;
+          chartInstance.data.datasets[0].data = data;
+          chartInstance.data.datasets[0].backgroundColor = colors;
+          chartInstance.update();
+        } else {
+          chartInstance = new Chart(chartCanvas, {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#ffffff' }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false } } }
+          });
+        }
+      }
+    }
+
+    function renderBudgets(monthItems) {
+      const spentByCat = {};
+      Object.keys(CATEGORIES).forEach((cat) => { spentByCat[cat] = 0; });
+      monthItems.forEach((item) => {
+        const cat = CATEGORIES[item.category] ? item.category : 'Other';
+        spentByCat[cat] += item.amount;
+      });
+
+      let overCount = 0;
+      let nearCount = 0;
+
+      budgetListEl.innerHTML = Object.keys(CATEGORIES).map((cat) => {
+        const spent = spentByCat[cat] || 0;
+        const limit = Number(budgets[cat]) || 0;
+        const rawPct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+        const barPct = Math.min(rawPct, 100);
+
+        let statusText = 'On track';
+        let statusClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        let barColor = '#10b981';
+
+        if (limit > 0 && rawPct >= 100) {
+          overCount++;
+          statusText = 'Over budget';
+          statusClass = 'bg-rose-50 text-rose-700 border-rose-200';
+          barColor = '#ef4444';
+        } else if (limit > 0 && rawPct >= 80) {
+          nearCount++;
+          statusText = 'Near limit';
+          statusClass = 'bg-amber-50 text-amber-700 border-amber-200';
+          barColor = '#f59e0b';
+        } else if (limit <= 0) {
+          statusText = 'No limit';
+          statusClass = 'bg-slate-100 text-slate-500 border-slate-200';
+        }
+
+        return `
+          <div class="rounded-xl border border-slate-200 p-3.5 bg-slate-50/50 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-semibold text-slate-800">${escapeHtml(cat)}</span>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full border ${statusClass}">${statusText}</span>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-xs">
+              <span class="text-slate-600 tabular-nums">${formatCompactRupees(spent)} spent</span>
+              <label class="flex items-center gap-1 text-slate-500">
+                <span>Limit ₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  data-budget-cat="${escapeHtml(cat)}"
+                  value="${limit}"
+                  class="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-900 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </label>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+              <div class="h-2 rounded-full transition-all" style="width:${barPct}%; background-color:${barColor}"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (overCount > 0) {
+        budgetSummaryBadgeEl.textContent = `${overCount} over budget`;
+        budgetSummaryBadgeEl.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 self-start sm:self-auto';
+      } else if (nearCount > 0) {
+        budgetSummaryBadgeEl.textContent = `${nearCount} near limit`;
+        budgetSummaryBadgeEl.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 self-start sm:self-auto';
+      } else {
+        budgetSummaryBadgeEl.textContent = 'All on track';
+        budgetSummaryBadgeEl.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 self-start sm:self-auto';
+      }
+    }
+
+    function render() {
+      populateMonthFilter();
+      const monthFilter = filterMonth.value;
+      const catFilter = filterCategory.value;
+      const modeFilter = filterMode.value;
+
+      const monthItems = expenses.filter((item) => monthFilter === 'ALL' || String(item.date || '').startsWith(monthFilter));
+      const filtered = monthItems.filter((item) => {
+        const matchCat = catFilter === 'ALL' || item.category === catFilter;
+        const matchMode = modeFilter === 'ALL' || item.mode === modeFilter;
+        return matchCat && matchMode;
+      });
+
+      const total = filtered.reduce((sum, item) => sum + item.amount, 0);
+      const cashTotal = filtered.filter((i) => i.mode === 'Cash').reduce((s, i) => s + i.amount, 0);
+      const onlineTotal = total - cashTotal;
+
+      totalAmountEl.textContent = formatRupees(total);
+      modeSplitEl.textContent = `${formatCompactRupees(cashTotal)} / ${formatCompactRupees(onlineTotal)}`;
+      entryCountEl.textContent = `(${filtered.length})`;
+      dashboardScopeEl.textContent =
+        monthFilter === 'ALL' && catFilter === 'ALL' && modeFilter === 'ALL'
+          ? 'All expenses'
+          : `Filtered (${monthFilter === 'ALL' ? 'All months' : monthFilter})`;
+
+      renderDashboard(filtered, total);
+      renderBudgets(monthItems);
+
+      if (expenses.length > 0) {
+        clearAllBtn.classList.remove('hidden');
+      } else {
+        clearAllBtn.classList.add('hidden');
+      }
+
+      if (filtered.length === 0) {
+        emptyStateEl.classList.remove('hidden');
+        expenseListEl.classList.add('hidden');
+        expenseListEl.innerHTML = '';
+        return;
+      }
+
+      emptyStateEl.classList.add('hidden');
+      expenseListEl.classList.remove('hidden');
+      expenseListEl.innerHTML = filtered.map((item) => {
+        const modeBadge = item.mode === 'Cash'
+          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+          : 'bg-sky-50 text-sky-700 border border-sky-200';
+        return `
+          <li class="py-3.5 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-medium text-sm text-slate-900 truncate">${escapeHtml(item.merchant)}</div>
+              <div class="flex flex-wrap items-center gap-2 mt-1">
+                <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">${escapeHtml(item.category)}</span>
+                <span class="inline-block text-xs font-medium px-2 py-0.5 rounded-md ${modeBadge}">${escapeHtml(item.mode)}</span>
+                <span class="text-xs text-slate-400">${escapeHtml(item.date)}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="font-semibold text-sm text-slate-900 tabular-nums">${formatRupees(item.amount)}</span>
+              <button
+                type="button"
+                data-delete-id="${item.id}"
+                aria-label="Delete expense"
+                class="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+          </li>
+        `;
+      }).join('');
+    }
+
+    async function syncFromGoogleSheet(silent = false) {
+      const url = sheetUrlInput.value.trim();
+      if (!url) {
+        if (!silent) {
+          syncFeedback.textContent = 'Paste your Apps Script Web App URL first.';
+          syncFeedback.className = 'text-xs rounded-lg px-3 py-2 text-rose-600 bg-rose-50 border border-rose-200';
+        }
+        return;
+      }
+      if (!url.startsWith('https://script.google.com/')) {
+        syncFeedback.textContent = 'Please enter a valid https://script.google.com/... Web App URL.';
+        syncFeedback.className = 'text-xs rounded-lg px-3 py-2 text-rose-600 bg-rose-50 border border-rose-200';
+        return;
+      }
+
+      try { localStorage.setItem(SHEET_URL_KEY, url); } catch (e) {}
+      updateSyncBarLabel();
+
+      syncSheetBtn.disabled = true;
+      syncSheetBtn.textContent = 'Syncing...';
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const rows = await res.json();
+        if (!Array.isArray(rows)) throw new Error('Unexpected format');
+
+        const existingKeys = new Set(
+          expenses.map((e) => `${e.date}|${String(e.merchant).toLowerCase()}|${Number(e.amount).toFixed(2)}`)
+        );
+
+        let added = 0;
+        rows.forEach((row, idx) => {
+          const date = String(row.date || '').slice(0, 10) || new Date().toISOString().split('T')[0];
+          const merchant = String(row.merchant || 'Online Transaction').trim();
+          const amount = parseFloat(row.amount);
+          const category = CATEGORIES[row.category] ? row.category : detectCategory(merchant);
+          const mode = row.mode === 'Cash' ? 'Cash' : 'Online';
+          if (isNaN(amount) || amount <= 0) return;
+
+          const key = `${date}|${merchant.toLowerCase()}|${amount.toFixed(2)}`;
+          if (!existingKeys.has(key)) {
+            existingKeys.add(key);
+            expenses.unshift({ id: 'gs_' + Date.now().toString(36) + '_' + idx, date, merchant, amount, category, mode });
+            added++;
+          }
+        });
+
+        expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        saveExpenses();
+        render();
+
+        syncFeedback.textContent = added > 0
+          ? `Synced ${added} new transaction${added === 1 ? '' : 's'} from your Google Sheet.`
+          : 'Already up to date with your Google Sheet.';
+        syncFeedback.className = 'text-xs rounded-lg px-3 py-2 text-emerald-700 bg-emerald-50 border border-emerald-200';
+      } catch (err) {
+        syncFeedback.textContent = 'Could not reach that Web App URL. Make sure it is deployed with "Who has access: Anyone".';
+        syncFeedback.className = 'text-xs rounded-lg px-3 py-2 text-rose-600 bg-rose-50 border border-rose-200';
+      } finally {
+        syncSheetBtn.disabled = false;
+        syncSheetBtn.textContent = 'Save & Sync';
+      }
+    }
+
+    toggleSettingsBtn.addEventListener('click', () => {
+      const isHidden = syncSettingsCard.classList.toggle('hidden');
+      if (!isHidden) sheetUrlInput.focus();
+    });
+
+    syncSheetBtn.addEventListener('click', () => syncFromGoogleSheet(false));
+
+    loadDemoBtn.addEventListener('click', () => {
+      const today = new Date().toISOString().split('T')[0];
+      const sample = [
+        { id: 'demo_1', date: today, merchant: 'Zepto (Sample)', amount: 349, category: 'Quick Commerce', mode: 'Online' },
+        { id: 'demo_2', date: today, merchant: 'Uber Ride (Sample)', amount: 185, category: 'Commute', mode: 'Online' },
+        { id: 'demo_3', date: today, merchant: 'Myntra (Sample)', amount: 1299, category: 'Shopping', mode: 'Online' },
+        { id: 'demo_4', date: today, merchant: 'Local Tea & Snacks (Sample)', amount: 60, category: 'Food & Dining', mode: 'Cash' }
+      ];
+      expenses = [...sample, ...expenses];
+      saveExpenses();
+      render();
+    });
+
+    exportCsvBtn.addEventListener('click', () => {
+      if (expenses.length === 0) return;
+      const header = ['Date', 'Merchant', 'Amount', 'Category', 'Mode'];
+      const rows = expenses.map((i) => [
+        i.date,
+        `"${String(i.merchant).replace(/"/g, '""')}"`,
+        i.amount,
+        `"${String(i.category).replace(/"/g, '""')}"`,
+        i.mode
+      ].join(','));
+      const csv = [header.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'expense_log.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      formError.classList.add('hidden');
+
+      const merchant = merchantInput.value.trim();
+      const amount = parseFloat(amountInput.value);
+      const category = categoryInput.value;
+      const mode = modeInput.value;
+      const date = dateInput.value;
+
+      if (!merchant || isNaN(amount) || amount <= 0 || !date) {
+        formError.textContent = 'Please enter a merchant, a valid amount above 0, and a date.';
+        formError.classList.remove('hidden');
+        return;
+      }
+
+      expenses.unshift({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        merchant,
+        amount,
+        category,
+        mode,
+        date
+      });
+
+      saveExpenses();
+      render();
+      merchantInput.value = '';
+      amountInput.value = '';
+      merchantInput.focus();
+    });
+
+    expenseListEl.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-delete-id]');
+      if (!btn) return;
+      const id = btn.getAttribute('data-delete-id');
+      expenses = expenses.filter((item) => item.id !== id);
+      saveExpenses();
+      render();
+    });
+
+    clearAllBtn.addEventListener('click', () => {
+      expenses = [];
+      saveExpenses();
+      render();
+    });
+
+    filterCategory.addEventListener('change', render);
+    filterMode.addEventListener('change', render);
+    filterMonth.addEventListener('change', render);
+
+    budgetListEl.addEventListener('change', (event) => {
+      const input = event.target.closest('[data-budget-cat]');
+      if (!input) return;
+      const cat = input.getAttribute('data-budget-cat');
+      const val = parseFloat(input.value);
+      budgets[cat] = !isNaN(val) && val >= 0 ? val : 0;
+      saveBudgets();
+      const mf = filterMonth.value;
+      const mi = expenses.filter((item) => mf === 'ALL' || String(item.date || '').startsWith(mf));
+      renderBudgets(mi);
+    });
+
+    render();
+    if (sheetUrlInput.value.trim()) {
+      syncFromGoogleSheet(true);
+    }
+  </script>
+</body>
+</html>
