@@ -349,7 +349,7 @@
     const STORAGE_KEY = 'public_expense_log_v1';
     const BUDGET_STORAGE_KEY = 'public_expense_budgets_v1';
     // Paste your Google Cloud OAuth Client ID below before pushing to GitHub:
-    const DEFAULT_GOOGLE_CLIENT_ID = '';
+    const DEFAULT_GOOGLE_CLIENT_ID = '715667856204-k3q4783pvj6652it0k2iclj6i0apn84o.apps.googleusercontent.com';
     const CLIENT_ID_KEY = 'public_expense_oauth_client_id_v1';
     const SHEET_URL_KEY = 'public_expense_sheet_url_v1';
 
@@ -429,6 +429,10 @@
       if (savedClientId) clientIdInput.value = savedClientId;
     } catch (e) {
       if (DEFAULT_GOOGLE_CLIENT_ID) clientIdInput.value = DEFAULT_GOOGLE_CLIENT_ID;
+    }
+
+    if (DEFAULT_GOOGLE_CLIENT_ID.trim()) {
+      toggleSettingsBtn.classList.add('hidden');
     }
 
     function updateSyncBarLabel() {
