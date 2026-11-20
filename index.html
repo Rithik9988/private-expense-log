@@ -322,23 +322,23 @@
     const CATEGORIES = {
       'Commute': {
         color: '#0ea5e9',
-        keywords: ['uber', 'ola', 'rapido', 'metro', 'irctc', 'redbus', 'blusmart', 'petrol', 'fuel', 'auto']
+        keywords: ['uber', 'ola', 'rapido', 'flexiride', 'metro', 'irctc', 'redbus', 'blusmart', 'petrol', 'fuel', 'auto']
       },
       'Quick Commerce': {
         color: '#8b5cf6',
-        keywords: ['zepto', 'blinkit', 'instamart', 'flipkart minutes', 'amazon now', 'bigbasket']
+        keywords: ['zepto', 'zeptonow', 'blinkit', 'instamart', 'flipkart minutes', 'amazon now', 'amazon pay grocer', 'bigbasket']
       },
       'Shopping': {
         color: '#f59e0b',
-        keywords: ['amazon', 'flipkart', 'myntra', 'ajio', 'nykaa', 'meesho']
+        keywords: ['amazon', 'flipkart', 'myntra', 'ajio', 'nykaa', 'meesho', 'elasticrun']
       },
       'Food & Dining': {
         color: '#10b981',
-        keywords: ['swiggy', 'zomato', 'starbucks', 'dominos', 'kfc', 'cafe', 'restaurant']
+        keywords: ['swiggy', 'zomato', 'smartq', 'starbucks', 'dominos', 'kfc', 'cafe', 'restaurant']
       },
       'Bills & Utilities': {
         color: '#6366f1',
-        keywords: ['airtel', 'jio', 'electricity', 'broadband', 'recharge', 'gas', 'water']
+        keywords: ['airtel', 'jio', 'electricity', 'broadband', 'recharge', 'gas', 'water', 'crd-pmnt', 'emi']
       },
       'Other': {
         color: '#64748b',
@@ -349,7 +349,7 @@
     const STORAGE_KEY = 'public_expense_log_v1';
     const BUDGET_STORAGE_KEY = 'public_expense_budgets_v1';
     // Paste your Google Cloud OAuth Client ID below before pushing to GitHub:
-    const DEFAULT_GOOGLE_CLIENT_ID = '715667856204-k3q4783pvj6652it0k2iclj6i0apn84o.apps.googleusercontent.com';
+    const DEFAULT_GOOGLE_CLIENT_ID = '';
     const CLIENT_ID_KEY = 'public_expense_oauth_client_id_v1';
     const SHEET_URL_KEY = 'public_expense_sheet_url_v1';
 
@@ -709,14 +709,47 @@
       }).join('');
     }
 
-    function parseGmailSnippet(subject, snippet, internalDateMs) {
-      const text = subject + ' ' + snippet;
-      const amtMatch = text.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
+    function decodeBase64Url(str) {
+      try {
+        const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+        const bin = atob(b64);
+        const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+        return new TextDecoder('utf-8').decode(bytes);
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function extractBodyText(payload) {
+      if (!payload) return '';
+      if (payload.body && payload.body.data) {
+        const raw = decodeBase64Url(payload.body.data);
+        return payload.mimeType === 'text/html'
+          ? raw.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+          : raw;
+      }
+      if (Array.isArray(payload.parts)) {
+        const plain = payload.parts.find((p) => p.mimeType === 'text/plain');
+        if (plain) return extractBodyText(plain);
+        return payload.parts.map((p) => extractBodyText(p)).join(' ');
+      }
+      return '';
+    }
+
+    function parseGmailMessage(subject, from, bodyText, snippet, internalDateMs) {
+      const fullText = `${subject} ${from} ${bodyText} ${snippet}`;
+      const lower = fullText.toLowerCase();
+
+      // Skip promotional / refunded / failed emails
+      if (lower.includes('new total ₹0.00') || lower.includes('payment failed') || lower.includes('credited to your')) {
+        return null;
+      }
+
+      const amtMatch = fullText.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
       if (!amtMatch) return null;
       const amount = parseFloat(amtMatch[1].replace(/,/g, ''));
       if (isNaN(amount) || amount <= 0) return null;
 
-      const lower = text.toLowerCase();
       let merchant = '';
       const order = ['Quick Commerce', 'Commute', 'Shopping', 'Food & Dining', 'Bills & Utilities'];
       for (const cat of order) {
@@ -728,9 +761,18 @@
         }
         if (merchant) break;
       }
-      if (!merchant) merchant = 'Online Transaction';
 
-      const category = detectCategory(text);
+      // Extract UPI merchant/payee if no known brand keyword matched
+      if (!merchant) {
+        const upiMatch = fullText.match(/UPI\/(?:P2M|P2A)\/\d+\/([^\n\r|]+)/i);
+        if (upiMatch && upiMatch[1]) {
+          merchant = upiMatch[1].trim().slice(0, 32);
+        } else {
+          merchant = 'Online Transaction';
+        }
+      }
+
+      const category = detectCategory(fullText);
       const dt = internalDateMs ? new Date(Number(internalDateMs)) : new Date();
       const date = dt.toISOString().split('T')[0];
       return { date, merchant, amount, category, mode: 'Online' };
@@ -742,8 +784,8 @@
       syncFeedback.classList.add('hidden');
 
       try {
-        const query = encodeURIComponent('(debited OR "UPI" OR "paid" OR "transaction") newer_than:14d');
-        const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=${query}`, {
+        const query = encodeURIComponent('(debited OR "UPI" OR "paid" OR "Your trip with" OR "Rapido Invoice") newer_than:21d');
+        const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${query}`, {
           headers: { Authorization: 'Bearer ' + accessToken }
         });
         if (!listRes.ok) throw new Error('Gmail API error ' + listRes.status);
@@ -751,25 +793,29 @@
         const messages = listData.messages || [];
 
         const existingKeys = new Set(
-          expenses.map((e) => `${e.date}|${String(e.merchant).toLowerCase()}|${Number(e.amount).toFixed(2)}`)
+          expenses.map((e) => `${e.date}|${Number(e.amount).toFixed(2)}`)
         );
 
         let added = 0;
         for (const m of messages) {
-          const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject`, {
+          const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`, {
             headers: { Authorization: 'Bearer ' + accessToken }
           });
           if (!msgRes.ok) continue;
           const msgData = await msgRes.json();
           const headers = (msgData.payload && msgData.payload.headers) || [];
           const subjHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
+          const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
           const subject = subjHeader ? subjHeader.value : '';
+          const from = fromHeader ? fromHeader.value : '';
+          const bodyText = extractBodyText(msgData.payload);
           const snippet = msgData.snippet || '';
 
-          const parsed = parseGmailSnippet(subject, snippet, msgData.internalDate);
+          const parsed = parseGmailMessage(subject, from, bodyText, snippet, msgData.internalDate);
           if (!parsed) continue;
 
-          const key = `${parsed.date}|${parsed.merchant.toLowerCase()}|${parsed.amount.toFixed(2)}`;
+          // Deduplicate same-day same-amount alerts (e.g. Axis Bank debit + Rapido/Uber receipt)
+          const key = `${parsed.date}|${parsed.amount.toFixed(2)}`;
           if (!existingKeys.has(key)) {
             existingKeys.add(key);
             expenses.unshift({ id: 'gm_' + m.id, ...parsed });
@@ -828,17 +874,23 @@
     signOutBtn.addEventListener('click', () => {
       const tokenToRevoke = currentAccessToken;
       currentAccessToken = null;
+      expenses = [];
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
+      render();
+
       signOutBtn.classList.add('hidden');
       connectGmailBtn.textContent = 'Connect Gmail';
-      syncStatusLabel.textContent = '· Signed out (token revoked)';
+      syncStatusLabel.textContent = '· Signed out (data cleared)';
 
       if (tokenToRevoke && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
         google.accounts.oauth2.revoke(tokenToRevoke, () => {
-          syncFeedback.textContent = 'Signed out and disabled your Google access token.';
+          syncFeedback.textContent = 'Signed out, revoked your Google token, and cleared your data from this browser.';
           syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-slate-700 bg-slate-100 border border-slate-200';
         });
       } else {
-        syncFeedback.textContent = 'Signed out.';
+        syncFeedback.textContent = 'Signed out and cleared your data from this browser.';
         syncFeedback.className = 'mt-2.5 text-xs rounded-lg px-3 py-2 text-slate-700 bg-slate-100 border border-slate-200';
       }
     });
