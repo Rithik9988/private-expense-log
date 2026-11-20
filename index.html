@@ -784,42 +784,56 @@
       syncFeedback.classList.add('hidden');
 
       try {
-        const query = encodeURIComponent('(debited OR "UPI" OR "paid" OR "Your trip with" OR "Rapido Invoice") newer_than:21d');
-        const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${query}`, {
-          headers: { Authorization: 'Bearer ' + accessToken }
-        });
-        if (!listRes.ok) throw new Error('Gmail API error ' + listRes.status);
-        const listData = await listRes.json();
-        const messages = listData.messages || [];
+        const query = encodeURIComponent('(debited OR "UPI" OR "paid" OR "Your trip with" OR "Rapido Invoice") newer_than:30d');
+        let messages = [];
+        let pageToken = '';
+        for (let page = 0; page < 3; page++) {
+          const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100&q=${query}` + (pageToken ? `&pageToken=${pageToken}` : '');
+          const listRes = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+          if (!listRes.ok) throw new Error('Gmail API error ' + listRes.status);
+          const listData = await listRes.json();
+          if (Array.isArray(listData.messages)) messages = messages.concat(listData.messages);
+          if (!listData.nextPageToken) break;
+          pageToken = listData.nextPageToken;
+        }
 
         const existingKeys = new Set(
           expenses.map((e) => `${e.date}|${Number(e.amount).toFixed(2)}`)
         );
 
         let added = 0;
-        for (const m of messages) {
-          const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`, {
-            headers: { Authorization: 'Bearer ' + accessToken }
-          });
-          if (!msgRes.ok) continue;
-          const msgData = await msgRes.json();
-          const headers = (msgData.payload && msgData.payload.headers) || [];
-          const subjHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
-          const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
-          const subject = subjHeader ? subjHeader.value : '';
-          const from = fromHeader ? fromHeader.value : '';
-          const bodyText = extractBodyText(msgData.payload);
-          const snippet = msgData.snippet || '';
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+          const batch = messages.slice(i, i + BATCH_SIZE);
+          const results = await Promise.all(batch.map(async (m) => {
+            const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`, {
+              headers: { Authorization: 'Bearer ' + accessToken }
+            });
+            if (!msgRes.ok) return null;
+            return { id: m.id, data: await msgRes.json() };
+          }));
 
-          const parsed = parseGmailMessage(subject, from, bodyText, snippet, msgData.internalDate);
-          if (!parsed) continue;
+          for (const item of results) {
+            if (!item || !item.data) continue;
+            const msgData = item.data;
+            const headers = (msgData.payload && msgData.payload.headers) || [];
+            const subjHeader = headers.find((h) => h.name.toLowerCase() === 'subject');
+            const fromHeader = headers.find((h) => h.name.toLowerCase() === 'from');
+            const subject = subjHeader ? subjHeader.value : '';
+            const from = fromHeader ? fromHeader.value : '';
+            const bodyText = extractBodyText(msgData.payload);
+            const snippet = msgData.snippet || '';
 
-          // Deduplicate same-day same-amount alerts (e.g. Axis Bank debit + Rapido/Uber receipt)
-          const key = `${parsed.date}|${parsed.amount.toFixed(2)}`;
-          if (!existingKeys.has(key)) {
-            existingKeys.add(key);
-            expenses.unshift({ id: 'gm_' + m.id, ...parsed });
-            added++;
+            const parsed = parseGmailMessage(subject, from, bodyText, snippet, msgData.internalDate);
+            if (!parsed) continue;
+
+            // Deduplicate same-day same-amount alerts (e.g. Axis Bank debit + Rapido/Uber receipt)
+            const key = `${parsed.date}|${parsed.amount.toFixed(2)}`;
+            if (!existingKeys.has(key)) {
+              existingKeys.add(key);
+              expenses.unshift({ id: 'gm_' + item.id, ...parsed });
+              added++;
+            }
           }
         }
 
